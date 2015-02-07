@@ -392,25 +392,19 @@
 
         if (!$("body").hasClass("disabled-onepage-scroll")) {
           switch(e.which) {
-            case 38:
+            case 38: // Arrow up
+            case 33: // Page up
               if (tag != 'input' && tag != 'textarea') el.moveUp()
             break;
-            case 40:
+            case 40: // Arrow down
+            case 32: // Spacebar
+            case 34: // Page down
               if (tag != 'input' && tag != 'textarea') el.moveDown()
             break;
-            case 32: //spacebar
-              if (tag != 'input' && tag != 'textarea') el.moveDown()
-            break;
-            case 33: //pageg up
-              if (tag != 'input' && tag != 'textarea') el.moveUp()
-            break;
-            case 34: //page dwn
-              if (tag != 'input' && tag != 'textarea') el.moveDown()
-            break;
-            case 36: //home
+            case 36: // Home
               el.moveTo(1);
             break;
-            case 35: //end
+            case 35: // End
               el.moveTo(total);
             break;
             default: return;
