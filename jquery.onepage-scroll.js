@@ -27,7 +27,9 @@
     afterMove: null,
     loop: true,
     responsiveFallback: false,
-    direction : 'vertical'
+    direction : 'vertical',
+    threshold : 1,
+    scrollCallback: null
 	};
 
 	/*------------------------------------------------*/
@@ -90,10 +92,22 @@
         leftPos = 0,
         lastAnimation = 0,
         quietPeriod = 500,
-        paginationList = "";
+        paginationList = "",
+        
+        /* The scroll threshold  determines how many scrolls are needed in a 
+           particular section before moving to the next section. This is cached,
+           since it can be retreived using a user-defined method in which case
+           it should only be called once on every visit to a scroll section. */
+        _threshold = threshold(),
+        /* The current scroll position relative to the given threshold, which
+           starts at 0 when in the bottom of scroll section, moving up to the
+           specified threshold at the top (both exclusive if no transition is 
+            to be made). */
+        currentScroll   = _threshold;
 
     $.fn.transformPage = function(settings, pos, index) {
       if (typeof settings.beforeMove == 'function') settings.beforeMove(index);
+      if ($.isFunction(settings.scrollCallback)) settings.scrollCallback(currentScroll, _threshold, index);
 
       // Just a simple edit that makes use of modernizr to detect an IE8 browser and changes the transform method into
     	// an top animate so IE8 users can also use this script.
@@ -119,7 +133,13 @@
     	}
       $(this).one('webkitTransitionEnd otransitionend oTransitionEnd msTransitionEnd transitionend', function(e) {
         if (typeof settings.afterMove == 'function') settings.afterMove(index);
+        _threshold = threshold();
+        currentScroll = currentScroll > 0 ? 0 : _threshold;
+        if ($.isFunction(settings.scrollCallback)) settings.scrollCallback(currentScroll, _threshold, index);
       });
+
+      // A successful transition to the next element is indicated by true.
+      return true;
     }
 
     $.fn.moveDown = function() {
@@ -128,16 +148,18 @@
       current = $(settings.sectionContainer + "[data-index='" + index + "']");
       next = $(settings.sectionContainer + "[data-index='" + (index + 1) + "']");
       if(next.length < 1) {
-        if (settings.loop == true) {
-          pos = 0;
-          next = $(settings.sectionContainer + "[data-index='1']");
-        } else {
-          return
-        }
+        // The last element is already reached, and looping is disabled. Return
+        // false to indicate that no transition will be done. 
+        if (!settings.loop) return false;
+        
+        pos = 0;
+        next = $(settings.sectionContainer + "[data-index='1']");
+        
 
-      }else {
+      } else {
         pos = (index * 100) * -1;
       }
+
       if (typeof settings.beforeMove == 'function') settings.beforeMove( next.data("index"));
       current.removeClass("active")
       next.addClass("active");
@@ -153,7 +175,9 @@
         var href = window.location.href.substr(0,window.location.href.indexOf('#')) + "#" + (index + 1);
         history.pushState( {}, document.title, href );
       }
-      el.transformPage(settings, pos, next.data("index"));
+      
+      // We let transformPage indicate whether the transition is ok or not.
+      return el.transformPage(settings, pos, next.data("index"));
     }
 
     $.fn.moveUp = function() {
@@ -163,13 +187,13 @@
       next = $(settings.sectionContainer + "[data-index='" + (index - 1) + "']");
 
       if(next.length < 1) {
-        if (settings.loop == true) {
-          pos = ((total - 1) * 100) * -1;
-          next = $(settings.sectionContainer + "[data-index='"+total+"']");
-        }
-        else {
-          return
-        }
+
+        // The first element is already reached, and looping is disabled. Return
+        // false to indicate that no transition will be done. 
+        if (!settings.loop) return false;
+
+        pos = ((total - 1) * 100) * -1;
+        next = $(settings.sectionContainer + "[data-index='"+total+"']");
       }else {
         pos = ((next.data("index") - 1) * 100) * -1;
       }
@@ -187,7 +211,9 @@
         var href = window.location.href.substr(0,window.location.href.indexOf('#')) + "#" + (index - 1);
         history.pushState( {}, document.title, href );
       }
-      el.transformPage(settings, pos, next.data("index"));
+
+      // We let transformPage indicate whether the transition is ok or not.
+      return el.transformPage(settings, pos, next.data("index"));
     }
 
     $.fn.moveTo = function(page_index) {
@@ -259,23 +285,45 @@
         });
       }
     }
-
-
+    
     function init_scroll(event, delta) {
+        //console.log(delta);
         deltaOfInterest = delta;
-        var timeNow = new Date().getTime();
-        // Cancel scroll if currently animating or within quiet period
-        if(timeNow - lastAnimation < quietPeriod + settings.animationTime) {
-            event.preventDefault();
-            return;
+        var timeNow = new Date().getTime(),
+            cb = settings.scrollCallback;
+
+        // Cancel scroll if currentScrollly animating or within quiet period
+        if(timeNow - lastAnimation < quietPeriod + settings.animationTime)
+            return event.preventDefault();
+
+        // TODO: 
+        // Pass index/element to callbacks
+        // Check if last index
+        // Make threshold a function
+        // Put both in the customization list
+        currentScroll = (delta > 0) ? Math.min(currentScroll + 1, _threshold)
+                                    : Math.max(currentScroll - 1, 0);
+        
+        if (0 < currentScroll && currentScroll < _threshold) {
+          if ($.isFunction(cb)) {
+            var index = $(settings.sectionContainer +".active").data("index");
+            cb(currentScroll, _threshold, index);
+          }
+          return event.preventDefault();
         }
 
         if (deltaOfInterest < 0) {
-          el.moveDown()
-        } else {
-          el.moveUp()
+          el.moveDown();
+        } else if (deltaOfInterest > 0) {
+          el.moveUp();
         }
+
         lastAnimation = timeNow;
+    }
+
+    function threshold() {
+      var th = settings.threshold;
+      return $.isFunction(th) ? th() : th;
     }
 
     // Prepare everything before binding wheel scroll
