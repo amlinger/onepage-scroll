@@ -98,7 +98,7 @@
            particular section before moving to the next section. This is cached,
            since it can be retreived using a user-defined method in which case
            it should only be called once on every visit to a scroll section. */
-        _threshold = threshold(),
+        _threshold = threshold(1),
         /* The current scroll position relative to the given threshold, which
            starts at 0 when in the bottom of scroll section, moving up to the
            specified threshold at the top (both exclusive if no transition is 
@@ -107,7 +107,7 @@
 
     $.fn.transformPage = function(settings, pos, index) {
       if (typeof settings.beforeMove == 'function') settings.beforeMove(index);
-      if ($.isFunction(settings.scrollCallback)) settings.scrollCallback(currentScroll, _threshold, index);
+      // if ($.isFunction(settings.scrollCallback)) settings.scrollCallback(currentScroll, _threshold, index);
 
       // Just a simple edit that makes use of modernizr to detect an IE8 browser and changes the transform method into
     	// an top animate so IE8 users can also use this script.
@@ -127,9 +127,9 @@
     	}
       $(this).one('webkitTransitionEnd otransitionend oTransitionEnd msTransitionEnd transitionend', function(e) {
         if (typeof settings.afterMove == 'function') settings.afterMove(index);
-        _threshold = threshold();
-        currentScroll = currentScroll > 0 ? 0 : _threshold;
-        if ($.isFunction(settings.scrollCallback)) settings.scrollCallback(currentScroll, _threshold, index);
+        // _threshold = threshold();
+        // currentScroll = currentScroll > 0 ? 0 : _threshold;
+        // if ($.isFunction(settings.scrollCallback)) settings.scrollCallback(currentScroll, _threshold, index);
       });
 
       // A successful transition to the next element is indicated by true.
@@ -284,7 +284,8 @@
         //console.log(delta);
         deltaOfInterest = delta;
         var timeNow = new Date().getTime(),
-            cb = settings.scrollCallback;
+            cb = settings.scrollCallback,
+            index = $(settings.sectionContainer + ".active").data("index");
 
         // Cancel scroll if currentScrollly animating or within quiet period
         if(timeNow - lastAnimation < quietPeriod + settings.animationTime)
@@ -295,29 +296,30 @@
         // Check if last index
         // Make threshold a function
         // Put both in the customization list
-        currentScroll = (delta > 0) ? Math.min(currentScroll + 1, _threshold)
-                                    : Math.max(currentScroll - 1, 0);
+        currentScroll = (delta > 0) ? Math.min(currentScroll + 1, _threshold+1)
+                                    : Math.max(currentScroll - 1, -1);
         
-        if (0 < currentScroll && currentScroll < _threshold) {
+        if (0 <= currentScroll && currentScroll <= _threshold) {
           if ($.isFunction(cb)) {
-            var index = $(settings.sectionContainer +".active").data("index");
             cb(currentScroll, _threshold, index);
           }
           return event.preventDefault();
         }
 
-        if (deltaOfInterest < 0) {
-          el.moveDown();
-        } else if (deltaOfInterest > 0) {
-          el.moveUp();
+        if (deltaOfInterest > 0 && el.moveUp()) {
+          _threshold    = threshold(index-1);
+          currentScroll = 0 ;
+        } else if(deltaOfInterest < 0 && el.moveDown()) {
+          _threshold    = threshold(index+1);
+          currentScroll = _threshold;
         }
 
         lastAnimation = timeNow;
     }
 
-    function threshold() {
+    function threshold(current) {
       var th = settings.threshold;
-      return $.isFunction(th) ? th() : th;
+      return $.isFunction(th) ? th(current) : th;
     }
 
     // Prepare everything before binding wheel scroll
